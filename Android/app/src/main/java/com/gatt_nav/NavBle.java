@@ -33,24 +33,24 @@ import static android.content.Context.BLUETOOTH_SERVICE;
 public class NavBle {
     private static final String TAG = NavBle.class.getSimpleName();
 
-    private static final UUID DIRECTION_SERVICE = UUID.fromString("04831534-ace0-4ce2-aae6-e2bfd499016a");
-    private static final UUID NEXT_DIRECTION_DISTANCE = UUID.fromString("76da4411-b2de-4bd6-b426-22a14912fea1");
-    private static final UUID CURRENT_SPEED = UUID.fromString("6156d492-e4a5-4e4c-a189-391791e05301");
+    private static final UUID NAV_SERVICE = UUID.fromString("04831534-ace0-4ce2-aae6-e2bfd499016a");
+    private static final UUID NAV_DATA = UUID.fromString("76da4411-b2de-4bd6-b426-22a14912fea1");
     private static final UUID NOTIFY_DESCRIPTOR = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 
 
     private BluetoothManager mBluetoothManager;
     private BluetoothGattServer mBluetoothGattServer;
     private BluetoothLeAdvertiser mBluetoothLeAdvertiser;
-    /* Collection of notification subscribers */
     private Set<BluetoothDevice> mRegisteredDevices = new HashSet<>();
+    private BleDeviceConnectionEvent connectionCallback;
 
     private Context context;
     private IGetNavData navDataSource;
 
-    public NavBle(Context context, IGetNavData navDataSource) {
+    public NavBle(Context context, IGetNavData navDataSource, BleDeviceConnectionEvent callback) {
         this.context = context;
         this.navDataSource = navDataSource;
+        this.connectionCallback = callback;
         init();
     }
 
@@ -68,6 +68,10 @@ public class NavBle {
     protected void finalize() throws Throwable {
         deInit();
         super.finalize();
+    }
+
+    private static byte[] navDtoToByteArray(NavDTO dto) {
+        return ByteBuffer.allocate(12).putFloat(dto.distToDest).putFloat(dto.angleToDest).putFloat(dto.speed).array();
     }
 
     private void init() {
@@ -117,24 +121,14 @@ public class NavBle {
      * Bluetooth subscribers.
      */
     private BluetoothGattService createService() {
-        BluetoothGattService service = new BluetoothGattService(DIRECTION_SERVICE,
+        BluetoothGattService service = new BluetoothGattService(NAV_SERVICE,
                 BluetoothGattService.SERVICE_TYPE_PRIMARY);
 
-        // Current Time characteristic
-        BluetoothGattCharacteristic nextDirectionDistance = new BluetoothGattCharacteristic(NEXT_DIRECTION_DISTANCE,
-                //Read-only characteristic, supports notifications
+        BluetoothGattCharacteristic navData = new BluetoothGattCharacteristic(NAV_DATA,
                 BluetoothGattCharacteristic.PROPERTY_READ | BluetoothGattCharacteristic.PROPERTY_NOTIFY,
                 BluetoothGattCharacteristic.PERMISSION_READ);
-        // Current Time characteristic
-        BluetoothGattCharacteristic currentSpeed = new BluetoothGattCharacteristic(CURRENT_SPEED,
-                //Read-only characteristic, supports notifications
-                BluetoothGattCharacteristic.PROPERTY_READ | BluetoothGattCharacteristic.PROPERTY_NOTIFY,
-                BluetoothGattCharacteristic.PERMISSION_READ);
-        currentSpeed.addDescriptor(new BluetoothGattDescriptor(NOTIFY_DESCRIPTOR, BluetoothGattDescriptor.PERMISSION_READ | BluetoothGattDescriptor.PERMISSION_WRITE));
-        nextDirectionDistance.addDescriptor(new BluetoothGattDescriptor(NOTIFY_DESCRIPTOR, BluetoothGattDescriptor.PERMISSION_READ | BluetoothGattDescriptor.PERMISSION_WRITE));
-
-        service.addCharacteristic(nextDirectionDistance);
-        service.addCharacteristic(currentSpeed);
+        navData.addDescriptor(new BluetoothGattDescriptor(NOTIFY_DESCRIPTOR, BluetoothGattDescriptor.PERMISSION_READ | BluetoothGattDescriptor.PERMISSION_WRITE));
+        service.addCharacteristic(navData);
 
         return service;
     }
@@ -162,33 +156,30 @@ public class NavBle {
         public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 Log.i(TAG, "BluetoothDevice CONNECTED: " + device);
+                if(connectionCallback != null) {
+                    connectionCallback.OnDeviceConnectionStateChanged(true);
+                }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 Log.i(TAG, "BluetoothDevice DISCONNECTED: " + device);
                 //Remove device from any active subscriptions
                 mRegisteredDevices.remove(device);
+                if(connectionCallback != null) {
+                    connectionCallback.OnDeviceConnectionStateChanged(false);
+                }
             }
         }
 
         @Override
         public void onCharacteristicReadRequest(BluetoothDevice device, int requestId, int offset,
                                                 BluetoothGattCharacteristic characteristic) {
-            if (NEXT_DIRECTION_DISTANCE.equals(characteristic.getUuid())) {
+            if (NAV_DATA.equals(characteristic.getUuid())) {
                 Log.i(TAG, "Read current direction");
                 NavDTO data = navDataSource.getData();
-                byte[] response = ByteBuffer.allocate(8).putFloat(data.distToDest).putFloat(data.angleToDest).array();
                 mBluetoothGattServer.sendResponse(device,
                         requestId,
                         BluetoothGatt.GATT_SUCCESS,
                         0,
-                        response);
-            } else if (CURRENT_SPEED.equals(characteristic.getUuid())) {
-                Log.i(TAG, "Read current speed");
-                byte[] response = ByteBuffer.allocate(4).putInt(currentSpeed).array();
-                mBluetoothGattServer.sendResponse(device,
-                        requestId,
-                        BluetoothGatt.GATT_SUCCESS,
-                        0,
-                        response);
+                        navDtoToByteArray(data));
             } else {
                 // Invalid characteristic
                 Log.w(TAG, "Invalid Characteristic Read: " + characteristic.getUuid());
@@ -300,7 +291,7 @@ public class NavBle {
         AdvertiseData data = new AdvertiseData.Builder()
                 .setIncludeDeviceName(true)
                 .setIncludeTxPowerLevel(false)
-                .addServiceUuid(new ParcelUuid(DIRECTION_SERVICE))
+                .addServiceUuid(new ParcelUuid(NAV_SERVICE))
                 .build();
 
         mBluetoothLeAdvertiser
@@ -341,35 +332,18 @@ public class NavBle {
     }
 
 
-    private void notifySpeed() {
+    public void notifyNavData(NavDTO data) {
         if (mRegisteredDevices.isEmpty()) {
             Log.i(TAG, "No subscribers registered");
             return;
         }
         Log.i(TAG, "Sending speed update to " + mRegisteredDevices.size() + " subscribers");
         for (BluetoothDevice device : mRegisteredDevices) {
-            BluetoothGattCharacteristic currentSpeedCharacteristic = mBluetoothGattServer
-                    .getService(DIRECTION_SERVICE)
-                    .getCharacteristic(CURRENT_SPEED);
-            currentSpeedCharacteristic.setValue(ByteBuffer.allocate(4).putInt(currentSpeed).array());
-            mBluetoothGattServer.notifyCharacteristicChanged(device, currentSpeedCharacteristic, false);
+            BluetoothGattCharacteristic navDataCharacteristic = mBluetoothGattServer
+                    .getService(NAV_SERVICE)
+                    .getCharacteristic(NAV_DATA);
+            navDataCharacteristic.setValue(navDtoToByteArray(data));
+            mBluetoothGattServer.notifyCharacteristicChanged(device, navDataCharacteristic, false);
         }
     }
-
-    private void notifyDirection() {
-        if (mRegisteredDevices.isEmpty()) {
-            Log.i(TAG, "No subscribers registered");
-            return;
-        }
-
-        Log.i(TAG, "Sending direction update to " + mRegisteredDevices.size() + " subscribers");
-        for (BluetoothDevice device : mRegisteredDevices) {
-            BluetoothGattCharacteristic directionDistanceCharacteristic = mBluetoothGattServer
-                    .getService(DIRECTION_SERVICE)
-                    .getCharacteristic(NEXT_DIRECTION_DISTANCE);
-            directionDistanceCharacteristic.setValue(ByteBuffer.allocate(8).putDouble(currentDirectionDeg).array());
-            mBluetoothGattServer.notifyCharacteristicChanged(device, directionDistanceCharacteristic, false);
-        }
-    }
-
 }

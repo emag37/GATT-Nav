@@ -13,6 +13,7 @@ import android.util.Log;
 import android.util.Pair;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -31,7 +32,7 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNavData {
+public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNavData, BleDeviceConnectionEvent {
     private final String TAG = GattNav.class.getSimpleName();
 
     private boolean isNavigating = false;
@@ -45,6 +46,8 @@ public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNav
     private Button goBtn;
     private TextView currentAddressDisplay;
     private Timer updaterTask;
+    private TextView connectionStatusLbl;
+    private ImageView connectionStatusIndicator;
 
     private final int LOCATION_PERMISSION = 100;
 
@@ -89,9 +92,11 @@ public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNav
         });
 
         goBtn = findViewById(R.id.goBtn);
+        connectionStatusLbl = findViewById(R.id.connectedLbl);
+        connectionStatusIndicator = findViewById(R.id.connectionStatusImg);
         currentAddressDisplay = findViewById(R.id.youAreAtTxt);
 
-        ble = new NavBle(getApplicationContext(), this);
+        ble = new NavBle(getApplicationContext(), this, this);
         geocoder = new Geocoder(this);
         gps = new GPS(getApplicationContext());
 
@@ -196,5 +201,16 @@ public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNav
                 updateCurrentAddress();
             }
         }, 0, 1000);
+    }
+
+    @Override
+    public void OnDeviceConnectionStateChanged(boolean isConnected) {
+        if(isConnected) {
+            connectionStatusIndicator.setImageDrawable(getResources().getDrawable(R.drawable.circle_green,null));
+            connectionStatusLbl.setText("Display Connected");
+        } else {
+            connectionStatusIndicator.setImageDrawable(getResources().getDrawable(R.drawable.circle_red, null));
+            connectionStatusLbl.setText("Display Not Connected");
+        }
     }
 }
