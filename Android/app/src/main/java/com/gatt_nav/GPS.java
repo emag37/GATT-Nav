@@ -17,12 +17,12 @@ import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
-
 import static android.content.Context.SENSOR_SERVICE;
 
 public class GPS extends LocationCallback {
     private final String TAG = GPS.class.getSimpleName();
     private FusedLocationProviderClient locationProvider;
+    private static final float metersPerSecondToKmPerHour = 3.6f;
     private float currentSpeed = 0.0f;
     private float currentBearing = 0.0f;
     private float currentLatitude = 0.0f;
@@ -30,54 +30,34 @@ public class GPS extends LocationCallback {
     private boolean gotFirstReading = false;
     private GpsReadyEvent readyCallback = null;
 
-    private Sensor accelerometer;
-    private Sensor magnetometer;
+    private Sensor rotationVector;
     private SensorManager sensorManager;
-    private float[] accel = new float[3];
-    private float[] mag = new float[3];
     private float[] rMat = new float[9];
     private float[] orientation = new float[3];
 
     GeomagneticField geomagneticField = null;
 
-    static final float FILTER_ALPHA = 0.25f;
+    static private final float FILTER_ALPHA = 0.25f;
 
-    protected static float[] lowPassFilter( float[] input, float[] output ) {
-        if ( output == null ) return input;
 
-        for ( int i=0; i < input.length; i++ ) {
-            output[i] = output[i] + FILTER_ALPHA * (input[i] - output[i]);
-        }
+    protected static float lowPassFilter( float input, float output ) {
+        output = output + FILTER_ALPHA * (input - output);
+
         return output;
     }
 
     private SensorEventListener sensorListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent event) {
-            switch (event.sensor.getType()) {
-                case Sensor.TYPE_ACCELEROMETER:
-                    accel = lowPassFilter(event.values, accel);
-                    break;
-                case Sensor.TYPE_MAGNETIC_FIELD:
-                    mag = lowPassFilter(event.values, mag);
-                    break;
-                default:
-                    return;
+            SensorManager.getRotationMatrixFromVector( rMat, event.values );
+            // get the azimuth value (orientation[0]) in degree
+            float newBearing = (float) Math.toDegrees( SensorManager.getOrientation( rMat, orientation )[0] );
+            if(newBearing < 0) {
+                newBearing += 360;
             }
-            if (SensorManager.getRotationMatrix(rMat, null, accel, mag)) {
-
-                SensorManager.getOrientation(rMat, orientation);
-                float bearing = (float) Math.toDegrees(orientation[0]);
-                if(geomagneticField != null) {
-                    bearing += geomagneticField.getDeclination();
-                }
-                bearing -= 90.0f;
-                if(bearing < 0) {
-                    bearing += 360.0f;
-                } 
-                //Log.d(TAG, "Current bearing is: " + bearing + " degrees");
-                currentBearing = bearing; //East of north to 0 if north
-            }
+            newBearing -= 90;
+            currentBearing = lowPassFilter(newBearing, currentBearing);
+            //Log.d(TAG, "Current bearing is: " + currentBearing + " degrees");
         }
 
         @Override
@@ -97,11 +77,9 @@ public class GPS extends LocationCallback {
             locationProvider.requestLocationUpdates(req,this, null);
 
             sensorManager = (SensorManager)ctx.getSystemService(SENSOR_SERVICE);
-            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            magnetometer = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
-            sensorManager.registerListener(sensorListener, accelerometer, SensorManager.SENSOR_DELAY_GAME);
-            sensorManager.registerListener(sensorListener, magnetometer, SensorManager.SENSOR_DELAY_GAME);
+            rotationVector = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+            sensorManager.registerListener(sensorListener, rotationVector, SensorManager.SENSOR_DELAY_GAME);
         } else {
             throw new RuntimeException("Need location permission!");
         }
@@ -126,7 +104,7 @@ public class GPS extends LocationCallback {
     @Override
     public void onLocationResult(LocationResult location) {
         Log.d(TAG, "Got location update: " + location.toString());
-        currentSpeed = location.getLastLocation().getSpeed();
+        currentSpeed = location.getLastLocation().getSpeed() * metersPerSecondToKmPerHour;
         if(location.getLastLocation().hasBearing()) {
             currentBearing = location.getLastLocation().getBearing();
         }

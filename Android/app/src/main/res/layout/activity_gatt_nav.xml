@@ -37,12 +37,12 @@
         android:id="@+id/youAreAtLbl"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="164dp"
+        android:layout_marginStart="8dp"
         android:layout_marginTop="48dp"
-        android:layout_marginEnd="163dp"
         android:text="You are at:"
+        app:layout_constraintHorizontal_bias="0"
         android:textAppearance="@style/TextAppearance.AppCompat.Medium"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/youAreAtTxt"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/goBtn" />
 
@@ -50,22 +50,24 @@
         android:id="@+id/youAreAtTxt"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="24dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="0dp"
         android:layout_marginEnd="8dp"
         android:ems="10"
-        android:gravity="center|top"
+        android:gravity="left"
+        app:layout_constraintVertical_bias="0.5"
         android:text="I have no idea where we are"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/youAreAtLbl" />
+        app:layout_constraintStart_toEndOf="@id/youAreAtLbl"
+        app:layout_constraintBottom_toBottomOf="@+id/youAreAtLbl"
+        app:layout_constraintTop_toTopOf="@+id/youAreAtLbl" />
 
     <Button
         android:id="@+id/goBtn"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="162dp"
-        android:layout_marginTop="44dp"
+        android:layout_marginTop="10dp"
         android:layout_marginEnd="162dp"
         android:onClick="onGoPressed"
         android:text="Go!"
@@ -73,31 +75,61 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/autocomplete_address" />
 
+    <View
+        android:id="@+id/divider"
+        android:layout_width="match_parent"
+        android:layout_height="4dp"
+        android:layout_marginTop="10dp"
+        app:layout_constraintTop_toBottomOf="@id/goBtn"
+        android:background="@color/quantum_black_divider"
+
+        />
+
     <TextView
-        android:id="@+id/connectedLbl"
-        android:layout_width="wrap_content"
+        android:id="@+id/displayStatusLbl"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="135dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="135dp"
-        android:gravity="center"
-        android:text="Display Not Connected"
-        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="50dp"
+        android:layout_marginStart="8dp"
+        android:text="Display: "
+        app:layout_constrainedWidth="true"
+        app:layout_constraintHorizontal_bias="0"
+        app:layout_constraintWidth_default="wrap"
+        app:layout_constraintHorizontal_chainStyle="spread_inside"
+        android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+        app:layout_constraintEnd_toStartOf="@id/connectedLbl"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/connectionStatusImg" />
+        app:layout_constraintTop_toBottomOf="@id/youAreAtLbl"
+        />
 
     <ImageView
         android:id="@+id/connectionStatusImg"
-        android:layout_width="102dp"
-        android:layout_height="102dp"
-        android:layout_marginStart="161dp"
-        android:layout_marginTop="30dp"
-        android:layout_marginEnd="161dp"
-        android:layout_marginBottom="8dp"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="12dp"
         android:src="@drawable/circle_red"
-        app:layout_constraintBottom_toTopOf="@+id/connectedLbl"
+        app:layout_constraintWidth_default="wrap"
+        app:layout_constraintHorizontal_bias="0"
+        android:gravity="start"
+        app:layout_constraintTop_toTopOf="@id/displayStatusLbl"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/youAreAtTxt" />
+        app:layout_constraintStart_toEndOf="@id/displayStatusLbl"
+        app:layout_constraintBottom_toBottomOf="@id/displayStatusLbl"/>
+
+    <TextView
+        android:id="@+id/connectedLbl"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:gravity="left"
+        android:text="Not Connected"
+        app:layout_constraintBottom_toBottomOf="@id/displayStatusLbl"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/connectionStatusImg"
+        app:layout_constraintTop_toTopOf="@id/displayStatusLbl"
+        app:layout_constraintVertical_bias="0.5" />
+
+
+
 
 </android.support.constraint.ConstraintLayout>

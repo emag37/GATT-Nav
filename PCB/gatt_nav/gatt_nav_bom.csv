@@ -1,0 +1,15 @@
+Collated Components:,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,
+Item,Qty,Reference(s),Value,LibPart,Footprint,Datasheet,Category,DK_Datasheet_Link,DK_Detail_Page,Description,Digi-Key_PN,Family,MPN,Manufacturer,Status
+1,2,"C1, C2",1uF,Device:C,Capacitors_SMD:C_0805_HandSoldering,~,,,,,1276-1066-1-ND,,,,
+2,1,C3,4.7uF,Device:C,Capacitors_SMD:C_0805_HandSoldering,~,,,,,732-7623-1-ND,,,,
+3,2,"J1, J2",Conn_01x02,Connector_Generic:Conn_01x02,Connectors:PINHEAD1-2,~,,,,,,,,,
+4,2,"Q1, Q2",BC807-40_215,dk_Transistors-Bipolar-BJT-Single:BC807-40_215,digikey-footprints:SOT-23-3,https://assets.nexperia.com/documents/data-sheet/BC807_BC807W_BC327.pdf,Discrete Semiconductor Products,https://assets.nexperia.com/documents/data-sheet/BC807_BC807W_BC327.pdf,"/product-detail/en/nexperia-usa-inc/BC807-40,215/1727-2917-1-ND/763456",TRANS PNP 45V 0.5A SOT23,1727-2917-1-ND,Transistors - Bipolar (BJT) - Single,"BC807-40,215",Nexperia USA Inc.,Active
+5,3,"R1, R2, R7",100k,Device:R,Resistors_SMD:R_0805_HandSoldering,~,,,,,RMCF0805FT100KCT-ND,,,,
+6,2,"R3, R6",1k,Device:R,Resistors_SMD:R_0805_HandSoldering,~,,,,,RNCP0805FTD1K00CT-ND,,,,
+7,1,R4,330,Device:R,Resistors_SMD:R_0805_HandSoldering,~,,,,,A129743CT-ND,,,,
+8,1,R5,2k,Device:R,Resistors_SMD:R_0805_HandSoldering,~,,,,,,,,,
+9,1,U1,ESP32-Minikit,eric_parts:ESP32-Minikit,dev:ESP32-Minikit,,,,,,,,,,
+10,1,U2,MCP73831-2-OT,Battery_Management:MCP73831-2-OT,TO_SOT_Packages_SMD:SOT-23-5_HandSoldering,http://ww1.microchip.com/downloads/en/DeviceDoc/20001984g.pdf,,,,,,,,,
+11,1,U3,Nokia_5110_Breakout,eric_parts:Nokia_5110_Breakout,dev:Nokia_5110_Breakout,,,,,,,,,,
+12,1,U4,MCP1700T-3302E_TT,dk_PMIC-Voltage-Regulators-Linear:MCP1700T-3302E_TT,digikey-footprints:SOT-23-3,http://www.microchip.com/mymicrochip/filehandler.aspx?ddocname=en011779,Integrated Circuits (ICs),http://www.microchip.com/mymicrochip/filehandler.aspx?ddocname=en011779,/product-detail/en/microchip-technology/MCP1700T-3302E-TT/MCP1700T3302ETTCT-ND/652677,IC REG LINEAR 3.3V 250MA SOT23-3,MCP1700T3302ETTCT-ND,PMIC - Voltage Regulators - Linear,MCP1700T-3302E/TT,Microchip Technology,Active

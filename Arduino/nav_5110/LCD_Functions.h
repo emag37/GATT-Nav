@@ -1,15 +1,16 @@
 #include <Arduino.h>
+#include <SPI.h>
 
 /* Pin definitions:
 Most of these pins can be moved to any digital or analog pin.
 DN(MOSI)and SCLK should be left where they are (SPI pins). The
 LED (backlight) pin should remain on a PWM-capable pin. */
-const int scePin = 7;   // SCE - Chip select, pin 3 on LCD.
-const int rstPin = 6;   // RST - Reset, pin 4 on LCD.
-const int dcPin = 5;    // DC - Data/Command, pin 5 on LCD.
-const int sdinPin = 11;  // DN(MOSI) - Serial data, pin 6 on LCD.
-const int sclkPin = 13;  // SCLK - Serial clock, pin 7 on LCD.
-const int blPin = 9;    // LED - Backlight LED, pin 8 on LCD.
+const int scePin = 15;   // SCE - Chip select, pin 3 on LCD.
+const int rstPin = 4;  // RST - Reset, pin 4 on LCD.
+const int dcPin = 0;    // DC - Data/Command, pin 5 on LCD.
+const int sdinPin = 13;  // DN(MOSI) - Serial data, pin 6 on LCD.
+const int sclkPin = 14;  // SCLK - Serial clock, pin 7 on LCD.
+const int blPin = 2;    // LED - Backlight LED, pin 8 on LCD.
 
 /* PCD8544-specific defines: */
 #define LCD_COMMAND  0
@@ -20,6 +21,8 @@ const int blPin = 9;    // LED - Backlight LED, pin 8 on LCD.
 #define LCD_HEIGHT  48 // Note: y-coordinates go high
 #define WHITE       0  // For drawing pixels. A 0 draws white.
 #define BLACK       1  // A 1 draws black.
+#define LCD_CHAR_HEIGHT 8
+#define LCD_CHAR_WIDTH 5
 
 /* Font table:
 This table contains the hex values that represent pixels for a
@@ -186,6 +189,7 @@ byte displayMap[LCD_WIDTH * LCD_HEIGHT / 8] = {
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (72,40)->(83,47) !!! The bottom right pixel!
 };
 
+SPIClass *hspi = NULL;
 // There are two memory banks in the LCD, data/RAM and commands.
 // This function sets the DC pin high or low depending, and then
 // sends the data byte
@@ -196,7 +200,7 @@ void LCDWrite(byte data_or_command, byte data)
 
   //Send the data
   digitalWrite(scePin, LOW);
-  SPI.transfer(data); //shiftOut(sdinPin, sclkPin, MSBFIRST, data);
+  hspi->write(data); //shiftOut(sdinPin, sclkPin, MSBFIRST, data);
   digitalWrite(scePin, HIGH);
 }
 
@@ -396,7 +400,7 @@ void setChar(char character, int x, int y, boolean bw)
 // progressive coordinates until it's done.
 // This function was grabbed from the SparkFun ColorLCDShield
 // library.
-void setStr(char * dString, int x, int y, boolean bw)
+void setStr(const char * dString, int x, int y, boolean bw)
 {
   while (*dString != 0x00) // loop until null terminator
   {
@@ -496,19 +500,25 @@ void lcdBegin(void)
   pinMode(scePin, OUTPUT);
   pinMode(rstPin, OUTPUT);
   pinMode(dcPin, OUTPUT);
-  pinMode(sdinPin, OUTPUT);
-  pinMode(sclkPin, OUTPUT);
+  //pinMode(sdinPin, OUTPUT);
+  //pinMode(sclkPin, OUTPUT);
   pinMode(blPin, OUTPUT);
-  analogWrite(blPin, 255);
+  //ledcAttachPin(blPin,0);
+  //ledcWrite(0, 255);
 
-  SPI.begin();
-  SPI.setDataMode(SPI_MODE0);
-  SPI.setBitOrder(MSBFIRST);
+  if(!hspi) {
+      hspi = new SPIClass(HSPI);
+      hspi->begin();
+      hspi->setDataMode(SPI_MODE0);
+      hspi->setBitOrder(MSBFIRST);
+  }
 
+  digitalWrite(scePin, HIGH);
   //Reset the LCD to a known state
   digitalWrite(rstPin, LOW);
   digitalWrite(rstPin, HIGH);
 
+  clearDisplay(false);
   LCDWrite(LCD_COMMAND, 0x21); //Tell LCD extended commands follow
   LCDWrite(LCD_COMMAND, 0xB0); //Set LCD Vop (Contrast)
   LCDWrite(LCD_COMMAND, 0x04); //Set Temp coefficent
@@ -516,6 +526,5 @@ void lcdBegin(void)
   //We must send 0x20 before modifying the display control mode
   LCDWrite(LCD_COMMAND, 0x20);
   LCDWrite(LCD_COMMAND, 0x0C); //Set display control, normal mode.
+
 }
-
-

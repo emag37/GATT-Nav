@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.stream.Stream;
 
 public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNavData, BleDeviceConnectionEvent {
     private final String TAG = GattNav.class.getSimpleName();
@@ -168,6 +169,9 @@ public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNav
 
     @Override
     public NavDTO getData() {
+        if(destination == null) {
+            return new NavDTO(0, 0, 0);
+        }
         Pair<Float,Float> pos = gps.getPosition();
         float bearing = gps.getCurrentBearing();
 
@@ -179,6 +183,10 @@ public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNav
         float[] distResults = new float[3];
         Location.distanceBetween(pos.first, pos.second, destination.latitude, destination.longitude, distResults);
 
+        for(int i = 0; i< distResults.length; i++) {
+            distResults[i] /= 1000.0f;
+        }
+
         float speed = gps.getCurrentSpeed();
 
         Log.d(TAG, "Angle between me and my destination is: " + angleToDest + "deg , it is " + distResults[0] + " km away");
@@ -186,9 +194,6 @@ public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNav
     }
 
     public void updateCurrentAddress() {
-        if(!isNavigating || destination == null) {
-            return;
-        }
         updateCurrentAddress(gps.getPosition());
     }
 
