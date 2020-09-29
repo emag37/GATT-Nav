@@ -4,18 +4,20 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.location.Address;
 import android.location.Geocoder;
-import android.location.Location;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v4.content.PermissionChecker;
-import android.support.v7.app.AppCompatActivity;
+import android.os.PowerManager;
 import android.util.Log;
-import android.util.Pair;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.SwitchCompat;
+import androidx.core.content.PermissionChecker;
 
 import com.google.android.gms.common.api.Status;
 import com.google.android.gms.maps.model.LatLng;
@@ -29,11 +31,11 @@ import org.apache.commons.math3.geometry.euclidean.twod.Vector2D;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.stream.Stream;
 
-public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNavData, BleDeviceConnectionEvent {
+public class GattNav extends AppCompatActivity implements  IGetNavData, BleDeviceConnectionEvent {
     private final String TAG = GattNav.class.getSimpleName();
 
     private boolean isNavigating = false;
@@ -44,14 +46,18 @@ public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNav
     private NavBle ble;
     private GPS gps;
 
+    private TextView navDataText;
+    private ImageView compassNeedleImg;
+    private SwitchCompat useGyroscopeSwitch;
     private Button goBtn;
     private TextView currentAddressDisplay;
     private Timer updaterTask;
     private TextView connectionStatusLbl;
     private ImageView connectionStatusIndicator;
+    private static String API_KEY = "";
 
     private final int LOCATION_PERMISSION = 100;
-
+    private PowerManager.WakeLock navigatingWl;
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -69,7 +75,7 @@ public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNav
         // Devices with a display should not go to sleep
         //getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        Places.initialize(this, "AIzaSyC1WcvU5AuYsk-SpsEu9JkrPcgL4j67hTc");
+        Places.initialize(this, API_KEY);
         AutocompleteSupportFragment destinationEditTxt = (AutocompleteSupportFragment)
                 getSupportFragmentManager().findFragmentById(R.id.autocomplete_address);
 
@@ -96,12 +102,23 @@ public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNav
         connectionStatusLbl = findViewById(R.id.connectedLbl);
         connectionStatusIndicator = findViewById(R.id.connectionStatusImg);
         currentAddressDisplay = findViewById(R.id.youAreAtTxt);
-
+        useGyroscopeSwitch = findViewById(R.id.useGyroscopeSwitch);
         ble = new NavBle(getApplicationContext(), this, this);
         geocoder = new Geocoder(this);
         gps = new GPS(getApplicationContext());
+        compassNeedleImg = findViewById(R.id.compassNeedleImg);
+        navDataText = findViewById(R.id.navDataText);
 
         updaterTask = new Timer();
+        updaterTask.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                on1SecondTick();
+            }
+        }, 0, 1000);
+
+        navigatingWl = ((PowerManager) getSystemService(
+                POWER_SERVICE)).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "GattNav:NavigatingWL");
     }
 
     @Override
@@ -145,67 +162,64 @@ public class GattNav extends AppCompatActivity implements GpsReadyEvent, IGetNav
                         .orElse(new LatLng(0,0));
                 Toast.makeText(this,"To " + (!address.isEmpty() ? address.iterator().next().getAddressLine(0) : "") + " we ride!", Toast.LENGTH_SHORT).show();
                 goBtn.setText("Wait, stop!");
+                navigatingWl.acquire();
             } catch (IOException e) {
                 e.printStackTrace();
                 isNavigating = false;
             }
-
-
         } else {
+            navigatingWl.release();
             goBtn.setText("Go!");
         }
     }
 
-    public void updateCurrentAddress(Pair<Float, Float> posLatLng) {
+    public void updateCurrentAddress(LatLng pos) {
         try {
-            geocoder.getFromLocation(posLatLng.first, posLatLng.second, 1).stream()
+            geocoder.getFromLocation(pos.latitude, pos.longitude, 1).stream()
                     .map(a -> a.getAddressLine(0))
-                    .findFirst().ifPresent(address -> runOnUiThread(() -> currentAddressDisplay.setText(address)));
+                    .findFirst().ifPresent(address -> currentAddressDisplay.setText(address));
         } catch (Exception e) {
             Log.e(TAG, "Error getting address from geocoder!");
             e.printStackTrace();
         }
     }
 
+    private float calculateBearingFromGyroscope(LatLng position) {
+        float bearing = gps.getCurrentCompassBearing();
+
+        Vector2D currPos = new Vector2D(position.latitude, position.longitude);
+        Vector2D destVect = new Vector2D(destination.latitude, destination.longitude).subtract(currPos);
+        Vector2D bearingVect = new Vector2D(Math.sin(Math.toRadians(bearing)), Math.cos(Math.toRadians(bearing)));
+
+        return (float) Math.toDegrees(Math.atan2(destVect.getX(), destVect.getY()) - Math.atan2(bearingVect.getX(), bearingVect.getY()));
+    }
     @Override
     public NavDTO getData() {
         if(destination == null) {
             return new NavDTO(0, 0, 0);
         }
-        Pair<Float,Float> pos = gps.getPosition();
-        float bearing = gps.getCurrentBearing();
-
-        Vector2D currPos = new Vector2D(pos.first, pos.second);
-        Vector2D destVect = new Vector2D(destination.latitude, destination.longitude).subtract(currPos);
-        Vector2D bearingVect = new Vector2D(Math.sin(Math.toRadians(bearing)), Math.cos(Math.toRadians(bearing)));
-        float angleToDest = (float) Math.toDegrees(Math.atan2(destVect.getX(), destVect.getY()) - Math.atan2(bearingVect.getX(), bearingVect.getY()));
-
-        float[] distResults = new float[3];
-        Location.distanceBetween(pos.first, pos.second, destination.latitude, destination.longitude, distResults);
-
-        for(int i = 0; i< distResults.length; i++) {
-            distResults[i] /= 1000.0f;
-        }
+        LatLng currentPos = gps.getPosition();
 
         float speed = gps.getCurrentSpeed();
+        float[] distAndBearing = gps.getGpsDistanceAndBearingTo(destination);
 
-        Log.d(TAG, "Angle between me and my destination is: " + angleToDest + "deg , it is " + distResults[0] + " km away");
-        return new NavDTO(distResults[0], angleToDest, speed);
+        float angleToDest = useGyroscopeSwitch.isChecked() ? calculateBearingFromGyroscope(currentPos) : distAndBearing[1];
+
+        Log.d(TAG, "Angle between me and my destination is: " + angleToDest + "deg , it is " + distAndBearing[0] + " km away");
+        return new NavDTO(distAndBearing[0], angleToDest, speed);
     }
 
-    public void updateCurrentAddress() {
-        updateCurrentAddress(gps.getPosition());
-    }
-
-    @Override
-    public void onReady() {
-        Log.i(TAG, "GPS Ready! Starting update task...");
-        updaterTask.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                updateCurrentAddress();
+    public void on1SecondTick() {
+        runOnUiThread(() -> {
+            LatLng currentPos = gps.getPosition();
+            updateCurrentAddress(currentPos);
+            if (destination != null) {
+                float[] distAndBearing = gps.getGpsDistanceAndBearingTo(destination);
+                compassNeedleImg.setRotation(distAndBearing[1]);
+                float speed = gps.getCurrentSpeed();
+                navDataText.setText(String.format(Locale.getDefault(), "Distance: %.3f Speed: %.3f Bearing %.3f",distAndBearing[0], speed, distAndBearing[1]));
             }
-        }, 0, 1000);
+        });
     }
 
     @Override

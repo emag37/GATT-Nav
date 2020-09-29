@@ -1,3 +1,7 @@
 Android/app/build
 Android/.idea
 PCB/gatt_nav/gerbers
+api_key_DO_NOT_COMMIT.txt
+.idea
+Android/app/local.properties
+Android/app/gradle Android/app/gradlew Android/app/gradlew.bat
