@@ -5,3 +5,4 @@ api_key_DO_NOT_COMMIT.txt
 .idea
 Android/app/local.properties
 Android/app/gradle Android/app/gradlew Android/app/gradlew.bat
+Android/app/src/main/java/com/gatt_nav/ApiKey.java

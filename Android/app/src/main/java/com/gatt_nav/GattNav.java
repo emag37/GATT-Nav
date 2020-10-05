@@ -54,10 +54,10 @@ public class GattNav extends AppCompatActivity implements  IGetNavData, BleDevic
     private Timer updaterTask;
     private TextView connectionStatusLbl;
     private ImageView connectionStatusIndicator;
-    private static String API_KEY = "";
 
     private final int LOCATION_PERMISSION = 100;
     private PowerManager.WakeLock navigatingWl;
+    private static final NavDTO BAD_NAV = new NavDTO(-1, 0, 0);
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -72,10 +72,7 @@ public class GattNav extends AppCompatActivity implements  IGetNavData, BleDevic
     private void init() {
         setContentView(R.layout.activity_gatt_nav);
 
-        // Devices with a display should not go to sleep
-        //getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-        Places.initialize(this, API_KEY);
+        Places.initialize(this, ApiKey.API_KEY);
         AutocompleteSupportFragment destinationEditTxt = (AutocompleteSupportFragment)
                 getSupportFragmentManager().findFragmentById(R.id.autocomplete_address);
 
@@ -184,26 +181,19 @@ public class GattNav extends AppCompatActivity implements  IGetNavData, BleDevic
         }
     }
 
-    private float calculateBearingFromGyroscope(LatLng position) {
-        float bearing = gps.getCurrentCompassBearing();
-
-        Vector2D currPos = new Vector2D(position.latitude, position.longitude);
-        Vector2D destVect = new Vector2D(destination.latitude, destination.longitude).subtract(currPos);
-        Vector2D bearingVect = new Vector2D(Math.sin(Math.toRadians(bearing)), Math.cos(Math.toRadians(bearing)));
-
-        return (float) Math.toDegrees(Math.atan2(destVect.getX(), destVect.getY()) - Math.atan2(bearingVect.getX(), bearingVect.getY()));
-    }
     @Override
     public NavDTO getData() {
         if(destination == null) {
-            return new NavDTO(0, 0, 0);
+            return BAD_NAV;
         }
-        LatLng currentPos = gps.getPosition();
 
         float speed = gps.getCurrentSpeed();
         float[] distAndBearing = gps.getGpsDistanceAndBearingTo(destination);
 
-        float angleToDest = useGyroscopeSwitch.isChecked() ? calculateBearingFromGyroscope(currentPos) : distAndBearing[1];
+        if (distAndBearing[0] == GPS.INVALID_RESULT) {
+            return BAD_NAV;
+        }
+        float angleToDest = useGyroscopeSwitch.isChecked() ? gps.getCurrentCompassBearingTo(destination) : distAndBearing[1];
 
         Log.d(TAG, "Angle between me and my destination is: " + angleToDest + "deg , it is " + distAndBearing[0] + " km away");
         return new NavDTO(distAndBearing[0], angleToDest, speed);
@@ -215,6 +205,10 @@ public class GattNav extends AppCompatActivity implements  IGetNavData, BleDevic
             updateCurrentAddress(currentPos);
             if (destination != null) {
                 float[] distAndBearing = gps.getGpsDistanceAndBearingTo(destination);
+                if (distAndBearing[0] == GPS.INVALID_RESULT) {
+                    navDataText.setText("No valid GPS data...");
+                    return;
+                }
                 compassNeedleImg.setRotation(distAndBearing[1]);
                 float speed = gps.getCurrentSpeed();
                 navDataText.setText(String.format(Locale.getDefault(), "Distance: %.3f Speed: %.3f Bearing %.3f",distAndBearing[0], speed, distAndBearing[1]));

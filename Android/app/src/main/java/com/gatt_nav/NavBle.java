@@ -175,6 +175,7 @@ public class NavBle {
             if (NAV_DATA.equals(characteristic.getUuid())) {
                 Log.i(TAG, "Read current direction");
                 NavDTO data = navDataSource.getData();
+
                 mBluetoothGattServer.sendResponse(device,
                         requestId,
                         BluetoothGatt.GATT_SUCCESS,

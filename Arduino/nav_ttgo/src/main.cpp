@@ -126,6 +126,9 @@ void updateDisplayFromGatt() {
       Serial.println();
       Serial.print("Distance: ");
       Serial.println(dist);
+      if (dist < 0 || speed < 0) {
+        return;
+      }
       display->SetValuesAndDraw(angle, speed, dist);
     }
 }
