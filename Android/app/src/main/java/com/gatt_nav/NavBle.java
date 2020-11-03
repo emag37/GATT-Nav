@@ -54,7 +54,7 @@ public class NavBle {
         init();
     }
 
-    private void deInit() {
+    public void deInit() {
         BluetoothAdapter bluetoothAdapter = mBluetoothManager.getAdapter();
         if (bluetoothAdapter.isEnabled()) {
             stopServer();
@@ -62,6 +62,8 @@ public class NavBle {
         }
 
         context.unregisterReceiver(mBluetoothReceiver);
+        this.navDataSource = null;
+        this.connectionCallback = null;
     }
 
     @Override
@@ -74,7 +76,7 @@ public class NavBle {
         return ByteBuffer.allocate(12).putFloat(dto.distToDest).putFloat(dto.angleToDest).putFloat(dto.speed).array();
     }
 
-    private void init() {
+    public void init() {
         mBluetoothManager = (BluetoothManager) context.getSystemService(BLUETOOTH_SERVICE);
         BluetoothAdapter bluetoothAdapter = mBluetoothManager.getAdapter();
         // We can't continue without proper Bluetooth support
@@ -172,8 +174,12 @@ public class NavBle {
         @Override
         public void onCharacteristicReadRequest(BluetoothDevice device, int requestId, int offset,
                                                 BluetoothGattCharacteristic characteristic) {
+            if (navDataSource == null) {
+                return;
+            }
+
             if (NAV_DATA.equals(characteristic.getUuid())) {
-                Log.i(TAG, "Read current direction");
+                Log.i(TAG, "Read current navigation data");
                 NavDTO data = navDataSource.getData();
 
                 mBluetoothGattServer.sendResponse(device,

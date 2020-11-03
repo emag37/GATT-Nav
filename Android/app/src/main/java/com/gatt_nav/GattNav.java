@@ -1,10 +1,16 @@
 package com.gatt_nav;
 
 import android.Manifest;
+import android.app.Notification;
+import android.app.PendingIntent;
+import android.content.ComponentName;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.location.Address;
 import android.location.Geocoder;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.os.PowerManager;
 import android.util.Log;
 import android.view.View;
@@ -35,17 +41,15 @@ import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class GattNav extends AppCompatActivity implements  IGetNavData, BleDeviceConnectionEvent {
+public class GattNav extends AppCompatActivity {
     private final String TAG = GattNav.class.getSimpleName();
 
     private boolean isNavigating = false;
     private Geocoder geocoder;
-    private LatLng destination;
-    private String selectedPlaceName;
 
-    private NavBle ble;
-    private GPS gps;
+    private Place selectedPlace;
 
+    private NavService.Binding boundNav;
     private TextView navDataText;
     private ImageView compassNeedleImg;
     private SwitchCompat useGyroscopeSwitch;
@@ -54,11 +58,21 @@ public class GattNav extends AppCompatActivity implements  IGetNavData, BleDevic
     private Timer updaterTask;
     private TextView connectionStatusLbl;
     private ImageView connectionStatusIndicator;
+    private UpdateServiceConnection updateServiceConnection;
 
     private final int LOCATION_PERMISSION = 100;
-    private PowerManager.WakeLock navigatingWl;
-    private static final NavDTO BAD_NAV = new NavDTO(-1, 0, 0);
 
+    private class UpdateServiceConnection implements ServiceConnection {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            boundNav = (NavService.Binding) service;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            boundNav = null;
+        }
+    }
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -77,7 +91,7 @@ public class GattNav extends AppCompatActivity implements  IGetNavData, BleDevic
                 getSupportFragmentManager().findFragmentById(R.id.autocomplete_address);
 
 // Specify the types of place data to return.
-        destinationEditTxt.setPlaceFields(Arrays.asList(Place.Field.ID, Place.Field.NAME));
+        destinationEditTxt.setPlaceFields(Arrays.asList(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG));
 
 // Set up a PlaceSelectionListener to handle the response.
         destinationEditTxt.setOnPlaceSelectedListener(new PlaceSelectionListener() {
@@ -85,7 +99,7 @@ public class GattNav extends AppCompatActivity implements  IGetNavData, BleDevic
             public void onPlaceSelected(Place place) {
                 // TODO: Get info about the selected place.
                 Log.i(TAG, "Place: " + place.getName() + ", " + place.getId());
-                selectedPlaceName = place.getName();
+                selectedPlace = place;
             }
 
             @Override
@@ -100,9 +114,8 @@ public class GattNav extends AppCompatActivity implements  IGetNavData, BleDevic
         connectionStatusIndicator = findViewById(R.id.connectionStatusImg);
         currentAddressDisplay = findViewById(R.id.youAreAtTxt);
         useGyroscopeSwitch = findViewById(R.id.useGyroscopeSwitch);
-        ble = new NavBle(getApplicationContext(), this, this);
         geocoder = new Geocoder(this);
-        gps = new GPS(getApplicationContext());
+
         compassNeedleImg = findViewById(R.id.compassNeedleImg);
         navDataText = findViewById(R.id.navDataText);
 
@@ -114,8 +127,9 @@ public class GattNav extends AppCompatActivity implements  IGetNavData, BleDevic
             }
         }, 0, 1000);
 
-        navigatingWl = ((PowerManager) getSystemService(
-                POWER_SERVICE)).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "GattNav:NavigatingWL");
+        Intent notificationIntent = new Intent(this, NavService.class);
+        updateServiceConnection = new UpdateServiceConnection();
+        bindService(notificationIntent, updateServiceConnection, BIND_AUTO_CREATE | BIND_IMPORTANT);
     }
 
     @Override
@@ -129,43 +143,32 @@ public class GattNav extends AppCompatActivity implements  IGetNavData, BleDevic
         }
 
     }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-    }
-
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        updaterTask.cancel();
+        updaterTask = null;
+        unbindService(updateServiceConnection);
+        updateServiceConnection = null;
     }
 
     public void onGoPressed(View view) {
+        if (boundNav == null) {
+            Toast.makeText(this,"Nav service not running yet...", Toast.LENGTH_SHORT).show();
+            return;
+        }
         isNavigating = !isNavigating;
         if (isNavigating) {
-            if(selectedPlaceName == null) {
+            if(selectedPlace == null) {
                 Toast.makeText(this,"Please select a destination!", Toast.LENGTH_SHORT).show();
                 return;
             }
-            try {
-                List<Address> address = geocoder.getFromLocationName(selectedPlaceName, 1);
-                destination = address.stream()
-                        .map(a -> new LatLng(a.getLatitude(), a.getLongitude())).findFirst()
-                        .orElse(new LatLng(0,0));
-                Toast.makeText(this,"To " + (!address.isEmpty() ? address.iterator().next().getAddressLine(0) : "") + " we ride!", Toast.LENGTH_SHORT).show();
-                goBtn.setText("Wait, stop!");
-                navigatingWl.acquire();
-            } catch (IOException e) {
-                e.printStackTrace();
-                isNavigating = false;
-            }
+            boundNav.setDestination(selectedPlace.getLatLng());
+
+            Toast.makeText(this,"To " + selectedPlace.getName() + " we ride!", Toast.LENGTH_SHORT).show();
+            goBtn.setText("Wait, stop!");
         } else {
-            navigatingWl.release();
+            boundNav.setDestination(null);
             goBtn.setText("Go!");
         }
     }
@@ -181,49 +184,33 @@ public class GattNav extends AppCompatActivity implements  IGetNavData, BleDevic
         }
     }
 
-    @Override
-    public NavDTO getData() {
-        if(destination == null) {
-            return BAD_NAV;
-        }
-
-        float speed = gps.getCurrentSpeed();
-        float[] distAndBearing = gps.getGpsDistanceAndBearingTo(destination);
-
-        if (distAndBearing[0] == GPS.INVALID_RESULT) {
-            return BAD_NAV;
-        }
-        float angleToDest = useGyroscopeSwitch.isChecked() ? gps.getCurrentCompassBearingTo(destination) : distAndBearing[1];
-
-        Log.d(TAG, "Angle between me and my destination is: " + angleToDest + "deg , it is " + distAndBearing[0] + " km away");
-        return new NavDTO(distAndBearing[0], angleToDest, speed);
-    }
-
     public void on1SecondTick() {
         runOnUiThread(() -> {
-            LatLng currentPos = gps.getPosition();
-            updateCurrentAddress(currentPos);
-            if (destination != null) {
-                float[] distAndBearing = gps.getGpsDistanceAndBearingTo(destination);
+            if (boundNav == null) {
+                return;
+            }
+            LatLng currentPos = boundNav.getPosition();
+            if (currentPos != null) {
+                updateCurrentAddress(currentPos);
+            }
+            if (boundNav.getDestination() != null) {
+                float[] distAndBearing = boundNav.getDistanceAndBearingToDestination();
                 if (distAndBearing[0] == GPS.INVALID_RESULT) {
                     navDataText.setText("No valid GPS data...");
                     return;
                 }
                 compassNeedleImg.setRotation(distAndBearing[1]);
-                float speed = gps.getCurrentSpeed();
+                float speed = boundNav.getSpeed();
                 navDataText.setText(String.format(Locale.getDefault(), "Distance: %.3f Speed: %.3f Bearing %.3f",distAndBearing[0], speed, distAndBearing[1]));
             }
-        });
-    }
 
-    @Override
-    public void OnDeviceConnectionStateChanged(boolean isConnected) {
-        if(isConnected) {
-            connectionStatusIndicator.setImageDrawable(getResources().getDrawable(R.drawable.circle_green,null));
-            connectionStatusLbl.setText("Display Connected");
-        } else {
-            connectionStatusIndicator.setImageDrawable(getResources().getDrawable(R.drawable.circle_red, null));
-            connectionStatusLbl.setText("Display Not Connected");
-        }
+            if(boundNav.isBleConnected()) {
+                connectionStatusIndicator.setImageDrawable(getResources().getDrawable(R.drawable.circle_green,null));
+                connectionStatusLbl.setText("Display Connected");
+            } else {
+                connectionStatusIndicator.setImageDrawable(getResources().getDrawable(R.drawable.circle_red, null));
+                connectionStatusLbl.setText("Display Not Connected");
+            }
+        });
     }
 }

@@ -29,20 +29,24 @@ import static android.content.Context.SENSOR_SERVICE;
 public class GPS extends LocationCallback {
     public static final int INVALID_RESULT = -1;
 
+    private static final int GPS_UPDATE_INTERVAL_MS = 1000;
+    private static final int GPS_UPDATE_FASTEST_INTERVAL_MS = 250;
+
     private final String TAG = GPS.class.getSimpleName();
     private FusedLocationProviderClient locationProvider;
     private static final float metersPerSecondToKmPerHour = 3.6f;
     private float currentSpeed = 0.0f;
     private float currentCompassBearing = 0.0f;
     private Location currentLocation;
-    private Location lastLocation;
+    private LatLng currentFilteredLatLng;
     private Date lastLocationUpdateAt;
 
     private Sensor rotationVectorSensor;
     private SensorManager sensorManager;
+    private SensorEventListener sensorListener;
     private float[] rMat = new float[9];
     private float[] orientation = new float[3];
-
+    private MedianLocationFilter locationFilter;
 
     static private final float FILTER_ALPHA = 0.25f;
 
@@ -54,20 +58,24 @@ public class GPS extends LocationCallback {
     }
 
     public GPS(Context ctx) {
+        init(ctx);
+    }
+
+    public void init(Context ctx) {
+        locationFilter = new MedianLocationFilter(3);
         if (ActivityCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             locationProvider = LocationServices.getFusedLocationProviderClient(ctx);
             LocationRequest req = new LocationRequest();
             lastLocationUpdateAt = new Date(0);
-            req.setInterval(5000);
-            req.setSmallestDisplacement(2.0f);
-            req.setFastestInterval(2000);
+            req.setInterval(GPS_UPDATE_INTERVAL_MS);
+            req.setFastestInterval(GPS_UPDATE_FASTEST_INTERVAL_MS);
             req.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
             locationProvider.requestLocationUpdates(req,this, null);
 
             sensorManager = (SensorManager)ctx.getSystemService(SENSOR_SERVICE);
 
             rotationVectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
-            SensorEventListener sensorListener = new SensorEventListener() {
+            sensorListener = new SensorEventListener() {
                 @Override
                 public synchronized void onSensorChanged(SensorEvent event) {
                     SensorManager.getRotationMatrixFromVector(rMat, event.values);
@@ -89,6 +97,13 @@ public class GPS extends LocationCallback {
         }
     }
 
+    public synchronized void deinit() {
+        locationProvider.removeLocationUpdates(this);
+        locationProvider = null;
+        sensorManager.unregisterListener(sensorListener);
+        sensorListener = null;
+    }
+
     public synchronized LatLng getPosition() {
         if (currentLocation != null) {
             return new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude());
@@ -102,7 +117,7 @@ public class GPS extends LocationCallback {
 
     private boolean isGpsBearingValid() {
         Date validFrom = new Date(System.currentTimeMillis() - (1000 * 20)); // valid from 20 seconds ago
-        return currentLocation != null && lastLocation != null && lastLocationUpdateAt.after(validFrom);
+        return currentLocation != null && lastLocationUpdateAt.after(validFrom) && currentFilteredLatLng != null;
     }
 
     public synchronized boolean hasGpsBearing() {
@@ -120,36 +135,31 @@ public class GPS extends LocationCallback {
         return (float) Math.toDegrees(Math.atan2(destVect.getX(), destVect.getY()) - Math.atan2(bearingVect.getX(), bearingVect.getY()));
     }
 
-    // Returns an array of 4 values: Distance in km, start bearing, end bearing, and total distance travelled since last update
+    // Returns an array of 3 values: Distance in km, start bearing, end bearing
     public synchronized float[] getGpsDistanceAndBearingTo(LatLng targetLocation) {
-        if (currentLocation == null || !isGpsBearingValid() || !currentLocation.hasBearing()) {
+        if (currentLocation == null || !isGpsBearingValid()) {
             return new float[]{INVALID_RESULT,-1,-1,-1};
         }
-        float[] distResults = new float[4];
-        Location.distanceBetween(currentLocation.getLatitude(), currentLocation.getLongitude(), targetLocation.latitude, targetLocation.longitude, distResults);
+        float[] distResults = new float[3];
+        Location.distanceBetween(currentFilteredLatLng.latitude, currentFilteredLatLng.longitude, targetLocation.latitude, targetLocation.longitude, distResults);
 
         distResults[0] /= 1000f;
-        Log.d(TAG, "GPS Bearing: " + currentLocation.getBearing() + " bearing to location: " + distResults[1]);
+        //Log.d(TAG, "GPS Bearing: " + currentLocation.getBearing() + " bearing to location: " + distResults[1]);
         if (distResults[1] < 0) {
             distResults[1] += 360;
         }
 
         // The difference between where we're going and where we want to go
-        Log.d(TAG, "Current bearing: " + currentLocation.getBearing() + " initial bearing: " + distResults[1] + " final bearing: " + distResults[2] + " moved: " + Math.abs(currentLocation.distanceTo(lastLocation)));
+        //Log.d(TAG, "Current bearing: " + currentLocation.getBearing() + " initial bearing: " + distResults[1] + " final bearing: " + distResults[2] + " moved: " + Math.abs(currentLocation.distanceTo(lastLocation)));
         distResults[1] -= currentLocation.getBearing();
-        distResults[3] = Math.abs(currentLocation.distanceTo(lastLocation));
         return distResults;
     }
 
     @Override
     public synchronized void onLocationResult(LocationResult location) {
-        Log.d(TAG, "Got location update: " + location.toString());
         currentSpeed = location.getLastLocation().getSpeed() * metersPerSecondToKmPerHour;
-        lastLocation = currentLocation;
         currentLocation = location.getLastLocation();
-        if (lastLocation == null) {
-            lastLocation = currentLocation;
-        }
+        currentFilteredLatLng = locationFilter.filterAndOutput(location.getLastLocation());
         lastLocationUpdateAt = new Date();
     }
 }
