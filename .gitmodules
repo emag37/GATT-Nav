@@ -1,3 +1,0 @@
-[submodule "PCB/vendor/kicad-libs"]
-	path = PCB/vendor/kicad-libs
-	url = https://github.com/sgreg/kicad-libs.git
