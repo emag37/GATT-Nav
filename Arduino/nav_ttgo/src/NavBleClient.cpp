@@ -26,6 +26,7 @@ std::string StateStr(NavBleClient::State state) {
         case NavBleClient::State::CONNECTING:
             return "Connecting";            
     }
+    return "Unknown";
 }
 
 NavBleClient::NavBleClient() : _current_state(State::DISCONNECTED) {

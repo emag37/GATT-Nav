@@ -14,16 +14,17 @@ public:
     void SetValuesAndDraw(float speed_kmh);
 private:
     CompassArrow _arrow;
-    float _compass_offset_x;
-    float _compass_offset_y;
     TFT_eSPI _tft;
     TFT_eSprite _sprite;
-    void WriteString(int x, int y, const char* to_write);
+    int WriteString(int x, int y, const char* to_write, int fontsize=2);
+    
     void SetCompass(float degrees);
     void SetSpeed(float newSpeedKmh);
     void SetDistance(float newDistanceKm);
     void Clear();
+    int StartOffsetForCentered(int to_center_x, const String& to_center, int centered_to_width);
 
+    int _compass_offset_y;
     float _current_compass_angle_deg = 0;
     float _current_speed_kmh = 0;
     float _current_distance_km = 0;
