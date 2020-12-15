@@ -57,7 +57,9 @@ void NavBleClient::onConnect(BLEClient* client) {
 
 void NavBleClient::onDisconnect(BLEClient *pClient) {
     LOG() << "BLE disconnected";
-    TransitionTo(State::DISCONNECTED);
+    if (_current_state == State::CONNECTED) {
+        TransitionTo(State::DISCONNECTED);
+    }
 }
 
 void NavBleClient::TransitionTo(State new_state) {
@@ -102,6 +104,8 @@ void NavBleClient::OnStateExited(State current_state) {
     switch(current_state) {
         case State::SCANNING:
          _ble_scan->stop();
+         break;
+         default:
          break;
     }
 }
@@ -148,7 +152,6 @@ NavBleClient::NavData NavBleClient::GetNavData() {
 }
 
 void NavBleClient::ConnectToServer() {
-
     delay(500);
     LOG() << "Connecting to server";
     _ble_client->setClientCallbacks(this);

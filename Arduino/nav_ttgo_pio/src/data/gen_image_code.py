@@ -21,3 +21,5 @@ with open('out.c','w') as out_file:
     out_file.write('};\n\n')
     out_file.write(f"constexpr int width = {image.shape[0]}\n")
     out_file.write(f"constexpr int height = {image.shape[1]}\n")
+
+print("Done!")
