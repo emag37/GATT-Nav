@@ -7,7 +7,6 @@ _label(label),
 _format(format), 
 _upper_left_x(upper_left_x), 
 _upper_left_y(upper_left_y) {
-
 }
 
 int DigitDisplay::StartOffsetForCentered(int to_center_x, const std::string& to_center, int centered_to_width) {

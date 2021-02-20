@@ -79,7 +79,6 @@ public class GPS extends LocationCallback {
                 @Override
                 public synchronized void onSensorChanged(SensorEvent event) {
                     SensorManager.getRotationMatrixFromVector(rMat, event.values);
-                    // get the azimuth value (orientation[0]) in degree
                     float newBearing = (float) Math.toDegrees(SensorManager.getOrientation(rMat, orientation)[0]);
                     if (newBearing < 0) {
                         newBearing += 360;

@@ -13,7 +13,8 @@ public:
         DISCONNECTED,
         SCANNING,
         CONNECTING,
-        CONNECTED
+        CONNECTED,
+        SUSPENDED
     };
 
     struct NavData { 
@@ -49,7 +50,8 @@ protected:
     bool validateDevice(BLEAdvertisedDevice device);
 public:
     NavBleClient();
-
+    void Suspend();
+    void Wakeup();
     void ProcessEvents();
     State GetState() const;
     std::string GetStateStr() const;

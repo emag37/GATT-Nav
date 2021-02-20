@@ -24,7 +24,9 @@ std::string StateStr(NavBleClient::State state) {
         case NavBleClient::State::CONNECTED:
             return "Connected";
         case NavBleClient::State::CONNECTING:
-            return "Connecting";            
+            return "Connecting";  
+        case NavBleClient::State::SUSPENDED:
+            return "Suspended";          
     }
     return "Unknown";
 }
@@ -96,7 +98,9 @@ void NavBleClient::OnStateEntered(State new_state) {
             break;
         case State::DISCONNECTED:
             Reset();
-            break;       
+            break;  
+        case State::SUSPENDED:
+            break;     
     }
 }
 
@@ -149,6 +153,23 @@ NavBleClient::NavData NavBleClient::GetNavData() {
      }
 
      return result;
+}
+
+void NavBleClient::Suspend() {
+    if (_current_state == State::CONNECTED) {
+        TransitionTo(State::SUSPENDED);
+        _ble_client->disconnect();
+    } else {
+        LOG() << "Cannot suspend BLE client in from current state";
+    }
+}
+
+void NavBleClient::Wakeup() {
+    if (_current_state == State::SUSPENDED) {
+        _ble_client->connect(_nav_device.get());
+    } else {
+        LOG() << "Cannot wakeup BLE client from current state";
+    }
 }
 
 void NavBleClient::ConnectToServer() {

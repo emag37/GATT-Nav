@@ -5,6 +5,8 @@
 #include "esp_err.h"
 #include "esp_pm.h"
 
+#include "freertos/task.h"
+
 #include "BLEDevice.h"
 #include "Display.hpp"
 #include "NavBleClient.hpp"
@@ -23,37 +25,57 @@ void UpdateDisplayFromNav() {
     }
 }
 
+void HoldLCDPinsForSleep() {
+  gpio_hold_en(GPIO_NUM_23);
+  gpio_hold_en(GPIO_NUM_4);
+}
+
+void ReleaseLCDPinsOnWakeup() {
+  gpio_hold_dis(GPIO_NUM_23);
+  gpio_hold_dis(GPIO_NUM_4);
+}
+
 void setup() {
-  LOG() << "Initializing BLE client";
   esp_pm_config_esp32_t pm_config = {
-        .max_freq_mhz = 80, // e.g. 80, 160, 240
+        .max_freq_mhz = 160, // e.g. 80, 160, 240
         .min_freq_mhz = 40, // e.g. 40
         .light_sleep_enable = true, // enable light sleep
     };
-
+  
   esp_wifi_set_mode(WIFI_MODE_NULL);
+  esp_wifi_stop();
   esp_pm_configure(&pm_config);
   esp_bt_controller_enable(ESP_BT_MODE_BLE);
+  esp_bt_sleep_enable();
+  gpio_deep_sleep_hold_en();
+  adc_power_off();
+
   display = new Display();
   display->Message("Startup...");
   nav_ble_client = new NavBleClient();
   LOG() << "Starting...";
   
   esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_N12);
-  
-  //adc_power_off();
 }
 
 void loop() {
   if (nav_ble_client->GetState() == NavBleClient::State::CONNECTED) {
     UpdateDisplayFromNav();
-    delay(1000);
+    LOG() << "Updated display, suspending";
+    nav_ble_client->Suspend();
+    HoldLCDPinsForSleep();
+    delay(1500);
+  } else if (nav_ble_client->GetState() == NavBleClient::State::SUSPENDED) {
+    LOG() << "Resuming BLE...";
+    ReleaseLCDPinsOnWakeup();
+    nav_ble_client->Wakeup();
   } else {
+    adc_power_on();
     char val_buf[20];
     double voltage = ((static_cast<double>(analogRead(34)) / 4095) * 3.9) * 2;
     sprintf(val_buf, "%01.4lf", voltage);
     display->Message(nav_ble_client->GetStateStr() + " " + val_buf);
-    delay(250);
+    adc_power_off();
   }
   nav_ble_client->ProcessEvents();
 }
