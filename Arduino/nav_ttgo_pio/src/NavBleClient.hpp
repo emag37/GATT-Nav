@@ -29,9 +29,9 @@ public:
 private:
     std::function<void()> _next_event;
     std::unique_ptr<BLEClient> _ble_client;
-    std::unique_ptr<BLEScan> _ble_scan;
+    BLEScan* _ble_scan; // This is a singleton managed by the BLEDevice
     std::unique_ptr<BLEAdvertisedDevice> _nav_device;
-    std::unique_ptr<BLERemoteCharacteristic> _nav_data_characteristic;
+    BLERemoteCharacteristic* _nav_data_characteristic; // Managed by the BLEClient
 
     static const BLEUUID _gattnav_service_id;
     static const BLEUUID _nav_data_id;
@@ -43,7 +43,8 @@ private:
     void TransitionTo(State new_state);
     void StartScan();
     void ConnectToServer();
-
+    void Reset();
+    
 protected:
     void onConnect(BLEClient* client) override;
     void onDisconnect(BLEClient *pClient) override;
@@ -56,5 +57,4 @@ public:
     State GetState() const;
     std::string GetStateStr() const;
     NavData GetNavData();
-    void Reset();
 };

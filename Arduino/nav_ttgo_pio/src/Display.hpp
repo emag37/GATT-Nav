@@ -1,6 +1,8 @@
 #pragma once
-#include <TFT_eSPI.h>
 
+// Note: Select #include <User_Setups/Setup25_TTGO_T_Display.h> in User_Setup_Select.h 
+// and undefine TFT_BL (we want to control the backlight pin independently)
+#include <TFT_eSPI.h>
 
 #include <string>
 

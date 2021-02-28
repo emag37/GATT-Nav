@@ -4,7 +4,8 @@
 #include <limits>
 #include "Arduino.h"
 
-
+static constexpr int MAX_WAKEUP_REATTEMPTS = 5;
+// Note: There's a bug in BLERemoteService.cpp:310. Comment out the delete here or else it does a double-free
 const BLEUUID NavBleClient::_gattnav_service_id("04831534-ace0-4ce2-aae6-e2bfd499016a");
 const BLEUUID NavBleClient::_nav_data_id("76da4411-b2de-4bd6-b426-22a14912fea1");
 
@@ -166,11 +167,20 @@ void NavBleClient::Suspend() {
 
 void NavBleClient::Wakeup() {
     if (_current_state == State::SUSPENDED) {
-        _ble_client->connect(_nav_device.get());
+        int attempt_counter = 0;
+        if(++attempt_counter <= MAX_WAKEUP_REATTEMPTS && !_ble_client->connect(_nav_device.get())) {
+            LOG() << "Could not reconnect, wait and retry...";
+            delay(100);
+        }
+        
+        if (attempt_counter > MAX_WAKEUP_REATTEMPTS) {
+            TransitionTo(State::DISCONNECTED);
+        }
     } else {
         LOG() << "Cannot wakeup BLE client from current state";
     }
 }
+
 
 void NavBleClient::ConnectToServer() {
     delay(500);
@@ -188,7 +198,7 @@ void NavBleClient::ConnectToServer() {
       return;
     }
 
-    _nav_data_characteristic = std::unique_ptr<BLERemoteCharacteristic>(pRemoteService->getCharacteristic(_nav_data_id));
+    _nav_data_characteristic = pRemoteService->getCharacteristic(_nav_data_id);
     if (!_nav_data_characteristic) {
       LOG() << "cannot connect, no characteristic";
       _ble_client->disconnect(); 
@@ -203,9 +213,8 @@ void NavBleClient::Reset() {
         TransitionTo(State::DISCONNECTED);
         return;
     }
-
     _ble_client = std::unique_ptr<decltype(_ble_client)::element_type>(BLEDevice::createClient());
-    _ble_scan = std::unique_ptr<decltype(_ble_scan)::element_type>(BLEDevice::getScan());
+    _ble_scan = BLEDevice::getScan();
     TransitionTo(State::SCANNING);
 }
 
