@@ -12,7 +12,7 @@ with open('out.c','w') as out_file:
         for column in row:
             r = int((31 * int(column[0])) / 255)
             g = int((63 * int(column[1])) / 255)
-            b = int((31 * int(column[1])) / 255)
+            b = int((31 * int(column[2])) / 255)
             out_val = r << 11
             out_val |= g << 5
             out_val |= b
