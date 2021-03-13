@@ -35,6 +35,7 @@ std::string StateStr(NavBleClient::State state) {
 NavBleClient::NavBleClient() : _current_state(State::DISCONNECTED) {
     LOG() << "Init nav BLE client";
     BLEDevice::init("Gatt_Nav");
+    esp_bt_sleep_enable();
     Reset();
 }
 

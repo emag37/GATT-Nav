@@ -21,13 +21,12 @@ static NavBleClient* nav_ble_client;
 extern const uint8_t ulp_bin_start[] asm("_binary_ulp_main_bin_start");
 extern const uint8_t ulp_bin_end[]   asm("_binary_ulp_main_bin_end");
 
-void UpdateDisplayFromNav() {
-    auto nav = nav_ble_client->GetNavData();
+void UpdateDisplayFromNav(const NavBleClient::NavData& nav_data) {
 
-    if (nav.is_nav_valid()) {
-      display->SetValuesAndDraw(nav.compass_angle, nav.speed, nav.distance_to_dest);
-    } else if (nav.is_speed_valid()) {
-      display->SetValuesAndDraw(nav.speed);
+    if (nav_data.is_nav_valid()) {
+      display->SetValuesAndDraw(nav_data.compass_angle, nav_data.speed, nav_data.distance_to_dest);
+    } else if (nav_data.is_speed_valid()) {
+      display->SetValuesAndDraw(nav_data.speed);
     }
 }
 
@@ -61,10 +60,7 @@ void setup() {
   esp_wifi_set_mode(WIFI_MODE_NULL);
   esp_wifi_stop();
   esp_pm_configure(&pm_config);
-  esp_bt_controller_enable(ESP_BT_MODE_BLE);
-  esp_bt_sleep_enable();
   gpio_deep_sleep_hold_en();
-  adc_power_off();
 
   display = new Display();
   display->Message("Startup...");
@@ -77,9 +73,10 @@ void setup() {
 
 void loop() {
   if (nav_ble_client->GetState() == NavBleClient::State::CONNECTED) {
-    UpdateDisplayFromNav();
-    //LOG() << "Updated display, suspending";
+    const auto nav = nav_ble_client->GetNavData();
     nav_ble_client->Suspend();
+    UpdateDisplayFromNav(nav);
+    //LOG() << "Updated display, suspending";
     HoldLCDPinsForSleep();
     delay(1500);
   } else if (nav_ble_client->GetState() == NavBleClient::State::SUSPENDED) {
@@ -87,12 +84,12 @@ void loop() {
     ReleaseLCDPinsOnWakeup();
     nav_ble_client->Wakeup();
   } else {
-    adc_power_on();
+    adc_power_acquire();
     char val_buf[20];
     double voltage = ((static_cast<double>(analogRead(34)) / 4095) * 3.9) * 2;
     sprintf(val_buf, "%01.4lf", voltage);
     display->Message(nav_ble_client->GetStateStr() + " " + val_buf);
-    adc_power_off();
+    adc_power_release();
   }
   nav_ble_client->ProcessEvents();
 }
